@@ -15,8 +15,8 @@ builds:
 
     # Custom ldflags templates.
     # Default is `-s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}} -X main.builtBy=goreleaser`.
-    ldflags:
-      - -X "github.com/jenkins-x-plugins/jx-context/pkg/version.Version={{.Env.VERSION}}" -X "{{.Env.ROOTPACKAGE}}/pkg/version.Version={{.Env.VERSION}}" -X "{{.Env.ROOTPACKAGE}}/pkg/version.Revision={{.Env.REV}}" -X "{{.Env.ROOTPACKAGE}}/pkg/version.Branch={{.Env.BRANCH}}" -X "{{.Env.ROOTPACKAGE}}/pkg/version.BuildDate={{.Env.BUILDDATE}}" -X "{{.Env.ROOTPACKAGE}}/pkg/version.GoVersion={{.Env.GOVERSION}}"
+    # ldflags:
+    #  - -X "github.com/jenkins-x-plugins/jx-context/pkg/version.Version={{.Env.VERSION}}" -X "{{.Env.ROOTPACKAGE}}/pkg/version.Version={{.Env.VERSION}}" -X "{{.Env.ROOTPACKAGE}}/pkg/version.Revision={{.Env.REV}}" -X "{{.Env.ROOTPACKAGE}}/pkg/version.Branch={{.Env.BRANCH}}" -X "{{.Env.ROOTPACKAGE}}/pkg/version.BuildDate={{.Env.BUILDDATE}}" -X "{{.Env.ROOTPACKAGE}}/pkg/version.GoVersion={{.Env.GOVERSION}}"
 
     # GOOS list to build for.
     # For more info refer to: https://golang.org/doc/install/source#environment
@@ -31,8 +31,10 @@ builds:
     # Defaults are 386 and amd64.
     goarch:
       - amd64
-      - arm
       - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
 
 archives:
   - name_template: "jx-context-{{ .Os }}-{{ .Arch }}"

@@ -28,6 +28,7 @@ type ContextOptions struct {
 }
 
 var (
+	version      string
 	context_long = templates.LongDesc(`
 		Displays or changes the current Kubernetes context (cluster).`)
 	context_example = templates.Examples(`
@@ -45,6 +46,7 @@ func Main() *cobra.Command {
 		Short:   "View or change the current Kubernetes context (Kubernetes cluster)",
 		Long:    context_long,
 		Example: context_example,
+		Version: version,
 		Run: func(cmd *cobra.Command, args []string) {
 			o.Args = args
 			err := o.Run()
