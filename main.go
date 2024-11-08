@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"k8s.io/client-go/tools/clientcmd/api"
 	"os"
 	"sort"
 	"strings"
@@ -46,6 +47,19 @@ func Main() *cobra.Command {
 		Short:   "View or change the current Kubernetes context (Kubernetes cluster)",
 		Long:    context_long,
 		Example: context_example,
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			_, _, filteredContextNames, err := o.filteredContextNames()
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveError
+			}
+			var contextNames []string
+			for _, v := range filteredContextNames {
+				if strings.HasPrefix(v, toComplete) {
+					contextNames = append(contextNames, v)
+				}
+			}
+			return contextNames, cobra.ShellCompDirectiveDefault
+		},
 		Version: version,
 		Run: func(cmd *cobra.Command, args []string) {
 			o.Args = args
@@ -66,24 +80,10 @@ func main() {
 }
 
 func (o *ContextOptions) Run() error {
-	config, po, err := kubeclient.LoadConfig()
+	config, po, contextNames, err := o.filteredContextNames()
 	if err != nil {
 		return err
 	}
-
-	if config == nil || config.Contexts == nil || len(config.Contexts) == 0 {
-		return fmt.Errorf("No Kubernetes contexts available! Try create or connect to cluster?")
-	}
-
-	contextNames := []string{}
-	for k, v := range config.Contexts {
-		if k != "" && v != nil {
-			if o.Filter == "" || strings.Index(k, o.Filter) >= 0 {
-				contextNames = append(contextNames, k)
-			}
-		}
-	}
-	sort.Strings(contextNames)
 
 	ctxName := ""
 	args := o.Args
@@ -106,13 +106,13 @@ func (o *ContextOptions) Run() error {
 	if ctxName != "" && ctxName != config.CurrentContext {
 		ctx := config.Contexts[ctxName]
 		if ctx == nil {
-			return fmt.Errorf("Could not find Kubernetes context %s", ctxName)
+			return fmt.Errorf("could not find Kubernetes context %s", ctxName)
 		}
 		newConfig := *config
 		newConfig.CurrentContext = ctxName
 		err = clientcmd.ModifyConfig(po, newConfig, false)
 		if err != nil {
-			return fmt.Errorf("Failed to update the kube config %s", err)
+			return fmt.Errorf("failed to update the kube config %s", err)
 		}
 		log.Logger().Infof("Now using namespace '%s' from context named '%s' on server '%s'.\n",
 			info(ctx.Namespace), info(newConfig.CurrentContext), info(kube.Server(config, ctx)))
@@ -123,6 +123,28 @@ func (o *ContextOptions) Run() error {
 			info(ns), info(config.CurrentContext), info(server))
 	}
 	return nil
+}
+
+func (o *ContextOptions) filteredContextNames() (*api.Config, *clientcmd.PathOptions, []string, error) {
+	config, po, err := kubeclient.LoadConfig()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	if config == nil || config.Contexts == nil || len(config.Contexts) == 0 {
+		return nil, nil, nil, fmt.Errorf("no Kubernetes contexts available! Try create or connect to cluster")
+	}
+
+	var contextNames []string
+	for k, v := range config.Contexts {
+		if k != "" && v != nil {
+			if o.Filter == "" || strings.Contains(k, o.Filter) {
+				contextNames = append(contextNames, k)
+			}
+		}
+	}
+	sort.Strings(contextNames)
+	return config, po, contextNames, nil
 }
 
 func (o *ContextOptions) PickContext(names []string, defaultValue string) (string, error) {
