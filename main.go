@@ -58,7 +58,7 @@ func Main() *cobra.Command {
 					contextNames = append(contextNames, v)
 				}
 			}
-			return contextNames, cobra.ShellCompDirectiveDefault
+			return contextNames, cobra.ShellCompDirectiveNoFileComp
 		},
 		Version: version,
 		Run: func(cmd *cobra.Command, args []string) {
