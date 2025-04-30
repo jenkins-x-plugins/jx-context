@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"github.com/jenkins-x/jx-helpers/v3/pkg/cmdrunner"
 	"k8s.io/client-go/tools/clientcmd/api"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -26,6 +28,7 @@ type ContextOptions struct {
 
 	Args   []string
 	Filter string
+	Shell  bool
 }
 
 var (
@@ -69,6 +72,7 @@ func Main() *cobra.Command {
 	}
 	o.AddBaseFlags(cmd)
 	cmd.Flags().StringVarP(&o.Filter, "filter", "f", "", "Filter the list of contexts to switch between using the given text")
+	cmd.Flags().BoolVarP(&o.Shell, "shell", "s", false, "Start shell with chosen context")
 	return cmd
 }
 
@@ -80,6 +84,28 @@ func main() {
 }
 
 func (o *ContextOptions) Run() error {
+	tmpKubeConfig := ""
+	if o.Shell {
+		// Copy kube config to temporary file
+		if o.BatchMode {
+			return fmt.Errorf("--batch mode is incompatible with --shell")
+		}
+		defaultPaths := clientcmd.NewDefaultPathOptions().GetLoadingPrecedence()
+		data, err := os.ReadFile(defaultPaths[0])
+		if err != nil {
+			return err
+		}
+		tmpKubeConfig = filepath.Join(os.TempDir(), fmt.Sprintf("kube-config-%d", os.Getpid()))
+		err = os.WriteFile(tmpKubeConfig, data, 0600)
+		if err != nil {
+			return err
+		}
+		err = os.Setenv("KUBECONFIG", tmpKubeConfig)
+		if err != nil {
+			return err
+		}
+	}
+
 	config, po, contextNames, err := o.filteredContextNames()
 	if err != nil {
 		return err
@@ -121,6 +147,24 @@ func (o *ContextOptions) Run() error {
 		server := kube.CurrentServer(config)
 		log.Logger().Infof("Using namespace '%s' from context named '%s' on server '%s'.\n",
 			info(ns), info(config.CurrentContext), info(server))
+	}
+	if o.Shell {
+		shell := os.Getenv("SHELL")
+		if shell == "" {
+			shell = "bash"
+		}
+
+		cmd := &cmdrunner.Command{
+			Name: shell,
+			In:   os.Stdin,
+			Out:  os.Stdout,
+			Err:  os.Stderr,
+		}
+		_, err = cmdrunner.QuietCommandRunner(cmd)
+		if err != nil {
+			return err
+		}
+		return os.Remove(tmpKubeConfig)
 	}
 	return nil
 }
