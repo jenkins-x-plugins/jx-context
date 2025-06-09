@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"github.com/jenkins-x/jx-helpers/v3/pkg/cmdrunner"
+	"github.com/jenkins-x/jx-helpers/v3/pkg/files"
+	"github.com/jenkins-x/jx-helpers/v3/pkg/homedir"
 	"k8s.io/client-go/tools/clientcmd/api"
 	"os"
 	"path/filepath"
@@ -95,7 +97,18 @@ func (o *ContextOptions) Run() error {
 		if err != nil {
 			return err
 		}
-		tmpKubeConfig = filepath.Join(os.TempDir(), fmt.Sprintf("kube-config-%d", os.Getpid()))
+		// Don't use os.TempDir() since files might be removed from there while in use
+		jx3HomeDir, err := homedir.ConfigDir(os.Getenv("JX3_HOME"), ".jx3")
+		if err != nil {
+			return err
+		}
+		path := filepath.Join(jx3HomeDir, "plugins", "jx-context")
+		err = os.MkdirAll(path, files.DefaultDirWritePermissions)
+		if err != nil {
+			return err
+		}
+		// TODO: Clean away files with no matching process
+		tmpKubeConfig = filepath.Join(path, fmt.Sprintf("kube-config-%d", os.Getpid()))
 		err = os.WriteFile(tmpKubeConfig, data, 0600)
 		if err != nil {
 			return err
