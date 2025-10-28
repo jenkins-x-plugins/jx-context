@@ -2,14 +2,15 @@ package main
 
 import (
 	"fmt"
-	"github.com/jenkins-x/jx-helpers/v3/pkg/cmdrunner"
-	"github.com/jenkins-x/jx-helpers/v3/pkg/files"
-	"github.com/jenkins-x/jx-helpers/v3/pkg/homedir"
-	"k8s.io/client-go/tools/clientcmd/api"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/jenkins-x/jx-helpers/v3/pkg/cmdrunner"
+	"github.com/jenkins-x/jx-helpers/v3/pkg/files"
+	"github.com/jenkins-x/jx-helpers/v3/pkg/homedir"
+	"k8s.io/client-go/tools/clientcmd/api"
 
 	"github.com/jenkins-x/jx-helpers/v3/pkg/cobras/helper"
 	"github.com/jenkins-x/jx-helpers/v3/pkg/kube"
@@ -117,6 +118,8 @@ func (o *ContextOptions) Run() error {
 		if err != nil {
 			return err
 		}
+		os.Unsetenv("BINARY_NAME")
+		os.Unsetenv("TOP_LEVEL_COMMAND")
 	}
 
 	config, po, contextNames, err := o.filteredContextNames()
