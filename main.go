@@ -99,6 +99,25 @@ func (o *ContextOptions) Run() error {
 		return err
 	}
 
+	if o.Shell {
+		if o.BatchMode {
+			return fmt.Errorf("--batch mode is incompatible with --shell")
+		}
+		// Don't use os.TempDir() since files might be removed from there while in use
+		jx3HomeDir, err := homedir.ConfigDir(os.Getenv("JX3_HOME"), ".jx3")
+		if err != nil {
+			return err
+		}
+		tmpKubeConfig = filepath.Join(jx3HomeDir, "plugins", "jx-context", fmt.Sprintf("kube-config-%d", os.Getpid()))
+		// TODO: Clean away files with no matching process
+		kubeConfig := append([]string{tmpKubeConfig}, po.GetLoadingPrecedence()...)
+		po.LoadingRules.ExplicitPath = tmpKubeConfig
+		err = os.Setenv(clientcmd.RecommendedConfigPathEnvVar, strings.Join(kubeConfig, string(filepath.ListSeparator)))
+		if err != nil {
+			return err
+		}
+	}
+
 	ctxName := ""
 	args := o.Args
 	if len(args) > 0 {
@@ -135,22 +154,6 @@ func (o *ContextOptions) Run() error {
 		}
 		var newConfig *api.Config
 		if o.Shell {
-			if o.BatchMode {
-				return fmt.Errorf("--batch mode is incompatible with --shell")
-			}
-			// Don't use os.TempDir() since files might be removed from there while in use
-			jx3HomeDir, err := homedir.ConfigDir(os.Getenv("JX3_HOME"), ".jx3")
-			if err != nil {
-				return err
-			}
-			tmpKubeConfig = filepath.Join(jx3HomeDir, "plugins", "jx-context", fmt.Sprintf("kube-config-%d", os.Getpid()))
-			// TODO: Clean away files with no matching process
-			kubeConfig := append([]string{tmpKubeConfig}, po.GetLoadingPrecedence()...)
-			po.LoadingRules.ExplicitPath = tmpKubeConfig
-			err = os.Setenv(clientcmd.RecommendedConfigPathEnvVar, strings.Join(kubeConfig, string(filepath.ListSeparator)))
-			if err != nil {
-				return err
-			}
 			newConfig = api.NewConfig()
 		} else {
 			newConfig, err = clientcmd.LoadFromFile(po.GetDefaultFilename())
@@ -162,7 +165,6 @@ func (o *ContextOptions) Run() error {
 		if err != nil {
 			log.Logger().WithError(err).Warnf("fail to store previous context in %s", po.GetDefaultFilename())
 		} else {
-			// Setting config.Preferences.Extensions
 			newConfig.Extensions[configExtension] = &runtime.Unknown{
 				Raw:         jsonCtx,
 				ContentType: runtime.ContentTypeJSON,
