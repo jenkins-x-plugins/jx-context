@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/jenkins-x/jx-helpers/v3/pkg/cmdrunner"
-	"github.com/jenkins-x/jx-helpers/v3/pkg/files"
 	"github.com/jenkins-x/jx-helpers/v3/pkg/homedir"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/clientcmd/api"
 
 	"github.com/jenkins-x/jx-helpers/v3/pkg/cobras/helper"
@@ -35,12 +37,16 @@ type ContextOptions struct {
 }
 
 var (
-	version      string
-	context_long = templates.LongDesc(`
+	configExtension = "previous-context.jayex.io"
+	version         string
+	context_long    = templates.LongDesc(`
 		Displays or changes the current Kubernetes context (cluster).`)
 	context_example = templates.Examples(`
 		# to select the context to switch to
 		jx context
+
+		# change to the previously selected context
+		jx context -
 
 		# view the current context
 		jx context -b`)
@@ -88,40 +94,6 @@ func main() {
 
 func (o *ContextOptions) Run() error {
 	tmpKubeConfig := ""
-	if o.Shell {
-		// Copy kube config to temporary file
-		if o.BatchMode {
-			return fmt.Errorf("--batch mode is incompatible with --shell")
-		}
-		defaultPaths := clientcmd.NewDefaultPathOptions().GetLoadingPrecedence()
-		data, err := os.ReadFile(defaultPaths[0])
-		if err != nil {
-			return err
-		}
-		// Don't use os.TempDir() since files might be removed from there while in use
-		jx3HomeDir, err := homedir.ConfigDir(os.Getenv("JX3_HOME"), ".jx3")
-		if err != nil {
-			return err
-		}
-		path := filepath.Join(jx3HomeDir, "plugins", "jx-context")
-		err = os.MkdirAll(path, files.DefaultDirWritePermissions)
-		if err != nil {
-			return err
-		}
-		// TODO: Clean away files with no matching process
-		tmpKubeConfig = filepath.Join(path, fmt.Sprintf("kube-config-%d", os.Getpid()))
-		err = os.WriteFile(tmpKubeConfig, data, 0600)
-		if err != nil {
-			return err
-		}
-		err = os.Setenv("KUBECONFIG", tmpKubeConfig)
-		if err != nil {
-			return err
-		}
-		os.Unsetenv("BINARY_NAME")
-		os.Unsetenv("TOP_LEVEL_COMMAND")
-	}
-
 	config, po, contextNames, err := o.filteredContextNames()
 	if err != nil {
 		return err
@@ -131,6 +103,17 @@ func (o *ContextOptions) Run() error {
 	args := o.Args
 	if len(args) > 0 {
 		ctxName = args[0]
+		if ctxName == "-" {
+			if ext, ok := config.Extensions[configExtension].(*runtime.Unknown); ok {
+				err = json.Unmarshal(ext.Raw, &ctxName)
+				if err != nil {
+					log.Logger().WithError(err).Warnf("can't interpret previous context")
+				}
+			}
+			if ctxName == "-" {
+				return errors.New("no previous context was set")
+			}
+		}
 		if stringhelpers.StringArrayIndex(contextNames, ctxName) < 0 {
 			return options.InvalidArg(ctxName, contextNames)
 		}
@@ -150,14 +133,48 @@ func (o *ContextOptions) Run() error {
 		if ctx == nil {
 			return fmt.Errorf("could not find Kubernetes context %s", ctxName)
 		}
-		newConfig := *config
+		var newConfig *api.Config
+		if o.Shell {
+			if o.BatchMode {
+				return fmt.Errorf("--batch mode is incompatible with --shell")
+			}
+			// Don't use os.TempDir() since files might be removed from there while in use
+			jx3HomeDir, err := homedir.ConfigDir(os.Getenv("JX3_HOME"), ".jx3")
+			if err != nil {
+				return err
+			}
+			tmpKubeConfig = filepath.Join(jx3HomeDir, "plugins", "jx-context", fmt.Sprintf("kube-config-%d", os.Getpid()))
+			// TODO: Clean away files with no matching process
+			kubeConfig := append([]string{tmpKubeConfig}, po.GetLoadingPrecedence()...)
+			po.LoadingRules.ExplicitPath = tmpKubeConfig
+			err = os.Setenv(clientcmd.RecommendedConfigPathEnvVar, strings.Join(kubeConfig, string(filepath.ListSeparator)))
+			if err != nil {
+				return err
+			}
+			newConfig = api.NewConfig()
+		} else {
+			newConfig, err = clientcmd.LoadFromFile(po.GetDefaultFilename())
+			if err != nil {
+				return err
+			}
+		}
+		jsonCtx, err := json.Marshal(config.CurrentContext)
+		if err != nil {
+			log.Logger().WithError(err).Warnf("fail to store previous context in %s", po.GetDefaultFilename())
+		} else {
+			// Setting config.Preferences.Extensions
+			newConfig.Extensions[configExtension] = &runtime.Unknown{
+				Raw:         jsonCtx,
+				ContentType: runtime.ContentTypeJSON,
+			}
+		}
 		newConfig.CurrentContext = ctxName
-		err = clientcmd.ModifyConfig(po, newConfig, false)
+		err = clientcmd.WriteToFile(*newConfig, po.GetDefaultFilename())
 		if err != nil {
 			return fmt.Errorf("failed to update the kube config %s", err)
 		}
 		log.Logger().Infof("Now using namespace '%s' from context named '%s' on server '%s'.\n",
-			info(ctx.Namespace), info(newConfig.CurrentContext), info(kube.Server(config, ctx)))
+			info(ctx.Namespace), info(ctxName), info(kube.Server(config, ctx)))
 	} else {
 		ns := kube.CurrentNamespace(config)
 		server := kube.CurrentServer(config)
@@ -176,6 +193,8 @@ func (o *ContextOptions) Run() error {
 			Out:  os.Stdout,
 			Err:  os.Stderr,
 		}
+		os.Unsetenv("BINARY_NAME")
+		os.Unsetenv("TOP_LEVEL_COMMAND")
 		_, err = cmdrunner.QuietCommandRunner(cmd)
 		if err != nil {
 			return err
