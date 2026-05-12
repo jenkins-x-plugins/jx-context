@@ -5,10 +5,11 @@ go 1.24.0
 toolchain go1.24.4
 
 require (
-	github.com/jenkins-x/jx-helpers/v3 v3.10.3
+	github.com/jenkins-x/jx-helpers/v3 v3.10.4
 	github.com/jenkins-x/jx-kube-client/v3 v3.0.8
 	github.com/jenkins-x/jx-logging/v3 v3.1.0
 	github.com/spf13/cobra v1.9.1
+	k8s.io/apimachinery v0.33.2
 	k8s.io/client-go v0.33.2
 )
 
@@ -64,7 +65,6 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/api v0.33.2 // indirect
-	k8s.io/apimachinery v0.33.2 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff // indirect
 	k8s.io/utils v0.0.0-20241210054802-24370beab758 // indirect
