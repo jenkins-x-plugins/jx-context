@@ -147,7 +147,7 @@ func (o *ContextOptions) Run() error {
 		ctxName = pick
 	}
 	info := termcolor.ColorInfo
-	if ctxName != "" && ctxName != config.CurrentContext {
+	if ctxName != "" && (ctxName != config.CurrentContext || o.Shell) {
 		ctx := config.Contexts[ctxName]
 		if ctx == nil {
 			return fmt.Errorf("could not find Kubernetes context %s", ctxName)
@@ -161,13 +161,15 @@ func (o *ContextOptions) Run() error {
 				return err
 			}
 		}
-		jsonCtx, err := json.Marshal(config.CurrentContext)
-		if err != nil {
-			log.Logger().WithError(err).Warnf("fail to store previous context in %s", po.GetDefaultFilename())
-		} else {
-			newConfig.Extensions[configExtension] = &runtime.Unknown{
-				Raw:         jsonCtx,
-				ContentType: runtime.ContentTypeJSON,
+		if ctxName != config.CurrentContext {
+			jsonCtx, err := json.Marshal(config.CurrentContext)
+			if err != nil {
+				log.Logger().WithError(err).Warnf("fail to store previous context in %s", po.GetDefaultFilename())
+			} else {
+				newConfig.Extensions[configExtension] = &runtime.Unknown{
+					Raw:         jsonCtx,
+					ContentType: runtime.ContentTypeJSON,
+				}
 			}
 		}
 		newConfig.CurrentContext = ctxName
