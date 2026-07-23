@@ -3,7 +3,7 @@ module github.com/jenkins-x-plugins/jx-context
 go 1.26.3
 
 require (
-	github.com/jenkins-x/jx-helpers/v3 v3.11.3
+	github.com/jenkins-x/jx-helpers/v3 v3.11.4
 	github.com/jenkins-x/jx-kube-client/v3 v3.0.11
 	github.com/jenkins-x/jx-logging/v3 v3.1.6
 	github.com/spf13/cobra v1.10.2
